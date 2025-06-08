@@ -15,21 +15,34 @@ export async function obterNoticiasFiltradas() {
   for (const url of fontes) {
     try {
       const feed = await parser.parseURL(url)
+
       for (const item of feed.items) {
         const titulo = item.title || ''
         const conteudo = item.contentSnippet || ''
         const link = item.link
         const pubDate = item.pubDate
-
+        const imagem = item.enclosure?.url || ''
         const textoCompleto = `${titulo} ${conteudo}`.toLowerCase()
 
         if (palavrasChave.some(palavra => textoCompleto.includes(palavra.toLowerCase()))) {
+          const horaFormatada = new Date(pubDate).toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit'
+          })
+
+          let categoria = 'geral'
+          if (url.includes('cotidiano')) categoria = 'segurança'
+          if (url.includes('poder')) categoria = 'política'
+          if (url.includes('rio-de-janeiro')) categoria = 'local'
+
           todasNoticias.push({
             titulo,
             resumo: conteudo,
             link,
-            hora: new Date(pubDate).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }),
-            fonte: new URL(link).hostname.replace('www.', '')
+            imagem,
+            data_hora: horaFormatada,
+            fonte: new URL(link).hostname.replace('www.', ''),
+            categoria
           })
         }
       }
