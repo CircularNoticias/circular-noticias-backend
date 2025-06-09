@@ -1,55 +1,71 @@
-import Parser from 'rss-parser'
-import { palavrasChave } from './filtros.js'
+import Parser from 'rss-parser';
+import { palavrasChave } from './filtros.js';
 
-const parser = new Parser()
+const parser = new Parser({
+  customFields: {
+    item: ['media:content', 'enclosure']
+  }
+});
 
 const fontes = [
   'https://g1.globo.com/rss/g1/rio-de-janeiro/',
   'https://feeds.folha.uol.com.br/cotidiano/rss091.xml',
-  'https://feeds.folha.uol.com.br/poder/rss091.xml'
-]
+  'https://feeds.folha.uol.com.br/poder/rss091.xml',
+  'https://extra.globo.com/rss.xml',
+  'https://odia.ig.com.br/rss.xml'
+];
 
 export async function obterNoticiasFiltradas() {
-  const todasNoticias = []
+  const todasNoticias = [];
 
   for (const url of fontes) {
     try {
-      const feed = await parser.parseURL(url)
+      const feed = await parser.parseURL(url);
 
       for (const item of feed.items) {
-        const titulo = item.title || ''
-        const conteudo = item.contentSnippet || ''
-        const link = item.link
-        const pubDate = item.pubDate
-        const imagem = item.enclosure?.url || ''
-        const textoCompleto = `${titulo} ${conteudo}`.toLowerCase()
+        const titulo = item.title || '';
+        const conteudoBruto = item.contentSnippet || '';
+        const conteudo = conteudoBruto.split('\n')[0].substring(0, 150);
+        const link = item.link;
+        const pubDate = item.pubDate;
+        const dataPublicacao = new Date(pubDate);
+        const agora = new Date();
+        const diffHoras = (agora - dataPublicacao) / (1000 * 60 * 60);
 
-        if (palavrasChave.some(palavra => textoCompleto.includes(palavra.toLowerCase()))) {
-          const horaFormatada = new Date(pubDate).toLocaleTimeString('pt-BR', {
-            hour: '2-digit',
-            minute: '2-digit'
-          })
+        if (diffHoras > 24) continue;
 
-          let categoria = 'geral'
-          if (url.includes('cotidiano')) categoria = 'segurança'
-          if (url.includes('poder')) categoria = 'política'
-          if (url.includes('rio-de-janeiro')) categoria = 'local'
+        const textoCompleto = `${titulo} ${conteudo}`.toLowerCase();
+        const contemPalavraChave = palavrasChave.some(p =>
+          textoCompleto.includes(p.toLowerCase())
+        );
 
-          todasNoticias.push({
-            titulo,
-            resumo: conteudo,
-            link,
-            imagem,
-            data_hora: horaFormatada,
-            fonte: new URL(link).hostname.replace('www.', ''),
-            categoria
-          })
+        if (!contemPalavraChave) continue;
+
+        // Tentativa de extrair imagem
+        let imagem = null;
+        if (item.enclosure?.url) {
+          imagem = item.enclosure.url;
+        } else if (item['media:content']?.url) {
+          imagem = item['media:content'].url;
         }
+
+        todasNoticias.push({
+          titulo,
+          resumo: conteudo,
+          link,
+          hora: dataPublicacao.toLocaleTimeString('pt-BR', {
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          fonte: new URL(link).hostname.replace('www.', ''),
+          data_hora: dataPublicacao.toLocaleString('pt-BR'),
+          imagem
+        });
       }
     } catch (erro) {
-      console.error('Erro na fonte:', url, erro.message)
+      console.error('Erro na fonte:', url, erro.message);
     }
   }
 
-  return todasNoticias
+  return todasNoticias;
 }
